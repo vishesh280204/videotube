@@ -1,0 +1,90 @@
+//require('dotenv').config({path:'/env'})
+import { configDotenv } from "dotenv";
+import mongoose from "mongoose";
+import connectDB from "./db/index.js";
+import { db_name } from "./constants.js";
+import dns from "node:dns";
+import { hostname } from "node:os";
+import express from "express";
+import { error } from "node:console";
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+ configDotenv()
+connectDB()
+.then((res)=>{console.log("successful")})
+.catch((e)=>{console.log("con failed",e)})
+
+console.log("********",process.env.mongodb_url);
+
+
+
+//  const app=express();
+// // using iife
+// ;(async ()=>{
+    
+//     try{
+//         const h=await mongoose.connect(`${process.env.mongodb_url}/${db_name}`)
+//         console.log(h.connection)
+//         app.on("error",()=>{
+//             console.log(error)
+//             throw error
+//         })
+//         app.listen(process.env.PORT),()=>{
+//             console.log("app is listening on port ",process.env.PORT)
+//         }
+//     }
+//     catch(e){
+//         console.log("**************",e)
+//     }
+// })()
+import express from "express"
+import cookieParser from "cookie-parser"
+import cors from "cors"
+const app=express()
+app.use(cors({
+    origin:process.env.cors_origin,
+    credentials:true
+}));
+
+app.use(express.json({limit:"16kb"})) //for getting json files in request
+app.use(express.urlencoded({ // for getting data from url as they might have plus or percentage between them
+    extended:true,//for giving nested objects
+    limit:"16kb"
+}))
+app.use(express.static("public")) // this is used to store data in the given folder,here folder name is public
+
+app.use(cookieParser())._route//for getting info from cookie
+
+
+
+//routes import
+import userRouter from "./routes/user.routes";
+app.use("/api/v1/users",userRouter)
+export {app}
+import mongoose from "mongoose";
+import { db_name } from "../constants.js";
+
+const connectDB= async ()=>{
+    try{
+        const connectionInstance=await mongoose.connect(`${process.env.mongodb_url}/${db_name}`)
+        console.log("mongoDB connected")
+        // console.log("mongoDB connected",connectionInstance.connection);
+    }
+    catch(e){
+        console.log("MongoDB conection error ",e);
+        process.exit(1);
+    }
+}
+export default connectDB
+
+
+
+
+
+PORT=8000
+mongodb_url=mongodb+srv://vishesh280204:Vishesh%401278@cluster0.lqvdrr2.mongodb.net
+cors_origin=* 
+# not to use * in general
+
+cloudinary_cloud_name=dhna01hqh
+cloudinary_api_key=313867733465376
+cloudinary_api_secret=lTxnD7uAbYY2c5V7CxdMl1oJstI
