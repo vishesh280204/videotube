@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
+import mongoose from "mongoose"
 
 const generateAccessandRefreshTokens=async(userId)=>{
     try{
@@ -13,7 +14,7 @@ const generateAccessandRefreshTokens=async(userId)=>{
         
         user.refreshToken=refreshToken
         await user.save({validateBeforeSave:false})
-
+        // console.log("In generate access token",refreshToken);
         return {accessToken,refreshToken}
     }catch(e){
         throw new ApiError(500,"Something went wrong while generating access and refresh tokens ")
@@ -129,8 +130,8 @@ const logoutUser= asyncHandler(async(req,res)=>{
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set:{
-                refreshToken:undefined
+            $unset:{
+                refreshToken:1
             }
         },
         {
@@ -163,10 +164,16 @@ const refreshAccessToken=asyncHandler( async (req,res)=>{
     try {
         const decodedToken=jwt.verify(incomingRefreshToken,process.env.refresh_token_secret)
     
-        const user=User.findById(decodedToken?._id)
+        const user=await User.findById(decodedToken?._id).select("+refreshToken");
         if(!user){
             throw new ApiError(401,"Invalid Refresh Token")
         }
+        
+        // console.log("\n\n\n","In refreshAccessToken","\n\n\n") 
+        // console.log(decodedToken._id,"\n\n\n");
+        // console.log(user._id,"\n\n\n");
+        // console.log(user.refreshToken,"\n\n\n");
+                                          
         if(incomingRefreshToken!==user?.refreshToken){
             throw new ApiError(401,"Refresh Token is expired or used")
         }
@@ -174,16 +181,16 @@ const refreshAccessToken=asyncHandler( async (req,res)=>{
             httpOnly:true,
             secure:true
         }
-        const {accessToken,newRefreshToken}=await generateAccessandRefreshTokens(user._id)
-    
+        const {accessToken,refreshToken:newRefreshToken}=await generateAccessandRefreshTokens(user._id)
+        // console.log("newRefreshToken :",newRefreshToken,"\n\n\n")
         return res
         .status(200)
         .cookie("accessToken",accessToken,options)
         .cookie("refreshToken",newRefreshToken,options)
         .json(
-            200,
+            new ApiResponse(200,
             {accessToken,refreshToken:newRefreshToken},
-            "Access Token Refreshed"
+            "Access Token Refreshed")
         )
     } catch (error) {
         throw new ApiError(401,error?.message || "Invalid Refresh Token")
@@ -197,10 +204,10 @@ const changeCurrentPassword=asyncHandler(async (req,res)=>{
     // hum id isliye nikal paye kyuki pehle verifyJWT chala hai and humne usme user declare kara tha req me
     const user =await User.findById(req.user?._id)
     const isPasswordCorrect= await user.isPasswordCorrect(oldPassword)
-    if(user.password!==oldPassword){
+    if(!isPasswordCorrect){
         throw new ApiError(401,"Invalid Old Password")
     }
-    user.password=newpassword
+    user.password=newPassword
     await user.save({validateBeforeSave:false})
     return res
     .status(200)
@@ -210,12 +217,12 @@ const changeCurrentPassword=asyncHandler(async (req,res)=>{
 const getCurrentUser=asyncHandler(async (req,res)=>{
     return res
     .status(200)
-    .json(200,req.user,"Current user fetched")
-})
+    .json(new ApiResponse(200,req.user,"Current user fetched"))
+}) 
 
 const updateAccountDetails=asyncHandler(async (req,res)=>{
     const {email,fullName}=req.body
-    const user=User.findByIdAndUpdate(req.user?._id,
+    const user= await User.findByIdAndUpdate(req.user?._id,
         {
             $set:{
                 email,
@@ -319,7 +326,7 @@ const getChannelInfo= asyncHandler(async (req,res)=>{
             }
         },
         {
-            addFields:{
+            $addFields:{
                 subscribersCount:{
                     $size:"$subscribers"
                 },
@@ -331,7 +338,7 @@ const getChannelInfo= asyncHandler(async (req,res)=>{
                 isSubscribed:{
                     $cond:{
                         if:{
-                            $in:[req.user?._id,"subscribers.subscriber"]
+                            $in:[req.user?._id,"$subscribers.subscriber"]
                         },
                         then:true,
                         else:false
@@ -370,6 +377,10 @@ const getWatchHistory = asyncHandler(async (req,res)=>{
             $match:{
                 _id: new mongoose.Types.ObjectId(req.user._id)
             },
+            
+
+        },
+        {
             $lookup:{
                 from: "videos",
                 localField:"watchHistory",
@@ -382,13 +393,15 @@ const getWatchHistory = asyncHandler(async (req,res)=>{
                             localField:"owner",
                             foreignField:"_id",
                             as:"owner",
-                            pipeline:{
-                                $project:{
-                                    fullName:1,
-                                    username:1,
-                                    avatar:1
+                            pipeline:[
+                                {
+                                    $project:{
+                                        fullName:1,
+                                        username:1,
+                                        avatar:1
+                                    }
                                 }
-                            }
+                            ]
                         }
                     },
                     {
@@ -402,7 +415,6 @@ const getWatchHistory = asyncHandler(async (req,res)=>{
 
                 ]
             }
-
         }
      ])
      return res

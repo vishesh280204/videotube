@@ -2,7 +2,7 @@ import { Router } from "express";
 import { changeCurrentPassword, getChannelInfo, getCurrentUser, getWatchHistory, loginUser, logoutUser, refreshAccessToken, registerUser, updateAccountDetails, updateUserAvatar, updateUserCoverImage } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { verify } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
 const router =Router()
 
